@@ -9,8 +9,8 @@ public class BlockInteractor : MonoBehaviour
 
     void Update()
     {
-        if (Input.GetMouseButtonDown(0)) Interact(-1, 0);
-        if (Input.GetMouseButtonDown(1)) Interact(1, 1);
+        if (Input.GetMouseButtonDown(0)) Interact(-1, (int)BlockType.Air);
+        if (Input.GetMouseButtonDown(1)) Interact(1, (int)BlockType.Dirt);
     }
 
     void Interact(float direction, byte block)
