@@ -13,6 +13,9 @@ public class VoxelWorld : MonoBehaviour
     readonly HashSet<Vector2Int> queuedChunks = new();
     readonly Dictionary<Vector2Int, VoxelChunk> loadedChunks = new();
 
+    const byte Air = 0;
+    const byte Water = 4;
+
     void OnApplicationQuit() => SaveDirtyChunks();
     void OnDisable() => SaveDirtyChunks();
 
@@ -109,6 +112,8 @@ public class VoxelWorld : MonoBehaviour
         var localPos = new Vector3Int(Mod(worldPos.x), worldPos.y, Mod(worldPos.z));
         chunk.SetBlock(localPos.x, localPos.y, localPos.z, block);
 
+        if (block == Air) TryFillWithWater(worldPos);
+
         if (localPos.x == 0) RebuildChunk(chunkCoord + Vector2Int.left);
         if (localPos.x == VoxelChunk.Size - 1) RebuildChunk(chunkCoord + Vector2Int.right);
         if (localPos.z == 0) RebuildChunk(chunkCoord + Vector2Int.down);
@@ -123,6 +128,20 @@ public class VoxelWorld : MonoBehaviour
     void SaveDirtyChunks()
     {
         foreach (var (coord, chunk) in loadedChunks) if (chunk.IsDirty) ChunkStorage.Save(coord, chunk.CopyBlocks());
+    }
+
+    void TryFillWithWater(Vector3Int worldPos)
+    {
+        if (GetBlockWorld(worldPos) != Air) return;
+
+        if (GetBlockWorld(worldPos + Vector3Int.left) == Water ||
+            GetBlockWorld(worldPos + Vector3Int.right) == Water ||
+            GetBlockWorld(worldPos + Vector3Int.forward) == Water ||
+            GetBlockWorld(worldPos + Vector3Int.back) == Water ||
+            GetBlockWorld(worldPos + Vector3Int.up) == Water)
+        {
+            SetBlockWorld(worldPos, Water);
+        }
     }
 
     public byte GetBlockWorld(Vector3Int worldPos)
