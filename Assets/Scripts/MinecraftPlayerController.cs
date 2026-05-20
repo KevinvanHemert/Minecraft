@@ -18,12 +18,6 @@ public class MinecraftPlayerController : MonoBehaviour
     public float swimUpSpeed = 4f;
     public float maxWaterFallSpeed = -1.5f;
 
-    const byte Air = 0;
-    const byte Grass = 1;
-    const byte Dirt = 2;
-    const byte Stone = 3;
-    const byte Water = 4;
-
     float cameraPitch;
     float verticalVelocity;
 
@@ -86,7 +80,7 @@ public class MinecraftPlayerController : MonoBehaviour
     bool IsInWater()
     {
         var pos = Vector3Int.FloorToInt(transform.position);
-        return world.GetBlockWorld(pos) == Water;
+        return world.GetBlockWorld(pos) == (byte)BlockType.Water;
     }
 
     bool CanJumpOutOfWater()
@@ -94,7 +88,7 @@ public class MinecraftPlayerController : MonoBehaviour
         var feet = Vector3Int.FloorToInt(transform.position);
         var head = Vector3Int.FloorToInt(transform.position + Vector3.up * 1.5f);
 
-        return world.GetBlockWorld(feet) == Water &&
-               world.GetBlockWorld(head) == Air;
+        return world.GetBlockWorld(feet) == (byte)BlockType.Water &&
+               world.GetBlockWorld(head) == (byte)BlockType.Air;
     }
 }

@@ -13,9 +13,6 @@ public class VoxelWorld : MonoBehaviour
     readonly HashSet<Vector2Int> queuedChunks = new();
     readonly Dictionary<Vector2Int, VoxelChunk> loadedChunks = new();
 
-    const byte Air = 0;
-    const byte Water = 4;
-
     void OnApplicationQuit() => SaveDirtyChunks();
     void OnDisable() => SaveDirtyChunks();
 
@@ -112,7 +109,7 @@ public class VoxelWorld : MonoBehaviour
         var localPos = new Vector3Int(Mod(worldPos.x), worldPos.y, Mod(worldPos.z));
         chunk.SetBlock(localPos.x, localPos.y, localPos.z, block);
 
-        if (block == Air) TryFillWithWater(worldPos);
+        if (block == (byte)BlockType.Air) TryFillWithWater(worldPos);
 
         if (localPos.x == 0) RebuildChunk(chunkCoord + Vector2Int.left);
         if (localPos.x == VoxelChunk.Size - 1) RebuildChunk(chunkCoord + Vector2Int.right);
@@ -132,15 +129,15 @@ public class VoxelWorld : MonoBehaviour
 
     void TryFillWithWater(Vector3Int worldPos)
     {
-        if (GetBlockWorld(worldPos) != Air) return;
+        if (GetBlockWorld(worldPos) != (byte)BlockType.Air) return;
 
-        if (GetBlockWorld(worldPos + Vector3Int.left) == Water ||
-            GetBlockWorld(worldPos + Vector3Int.right) == Water ||
-            GetBlockWorld(worldPos + Vector3Int.forward) == Water ||
-            GetBlockWorld(worldPos + Vector3Int.back) == Water ||
-            GetBlockWorld(worldPos + Vector3Int.up) == Water)
+        if (GetBlockWorld(worldPos + Vector3Int.left) == (byte)BlockType.Water ||
+            GetBlockWorld(worldPos + Vector3Int.right) == (byte)BlockType.Water ||
+            GetBlockWorld(worldPos + Vector3Int.forward) == (byte)BlockType.Water ||
+            GetBlockWorld(worldPos + Vector3Int.back) == (byte)BlockType.Water ||
+            GetBlockWorld(worldPos + Vector3Int.up) == (byte)BlockType.Water)
         {
-            SetBlockWorld(worldPos, Water);
+            SetBlockWorld(worldPos, (byte)BlockType.Water);
         }
     }
 
@@ -151,11 +148,7 @@ public class VoxelWorld : MonoBehaviour
         if (!loadedChunks.TryGetValue(chunkCoord, out var chunk))
             return 0;
 
-        return chunk.GetBlock(
-            Mod(worldPos.x),
-            worldPos.y,
-            Mod(worldPos.z)
-        );
+        return chunk.GetBlock(Mod(worldPos.x), worldPos.y, Mod(worldPos.z));
     }
 
     static int Mod(int value) => ((value % VoxelChunk.Size) + VoxelChunk.Size) % VoxelChunk.Size;

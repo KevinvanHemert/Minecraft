@@ -14,12 +14,6 @@ public class VoxelChunk : MonoBehaviour
     public int dirtDepth = 3;
     public int waterLevel = 5;
 
-    const byte Air = 0;
-    const byte Grass = 1;
-    const byte Dirt = 2;
-    const byte Stone = 3;
-    const byte Water = 4;
-
     public Vector2Int chunkCoord;
 
     public bool IsDirty { get; private set; }
@@ -117,14 +111,14 @@ public class VoxelChunk : MonoBehaviour
 
     byte GetTerrainBlock(int y, int height)
     {
-        if (y > height && y <= waterLevel) return Water;
-        if (y > height) return Air;
+        if (y > height && y <= waterLevel) return (byte)BlockType.Water;
+        if (y > height) return (byte)BlockType.Air;
 
         if (y == height)
-            return height < waterLevel ? Dirt : Grass;
+            return height < waterLevel ? (byte)BlockType.Dirt : (byte)BlockType.Grass;
 
-        if (y >= height - dirtDepth) return Dirt;
-        return Stone;
+        if (y >= height - dirtDepth) return (byte)BlockType.Dirt;
+        return (byte)BlockType.Stone;
     }
 
     void ForEachColumn(System.Action<int, int> action)

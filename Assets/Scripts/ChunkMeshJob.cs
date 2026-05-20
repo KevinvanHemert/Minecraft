@@ -18,12 +18,6 @@ public struct ChunkMeshJob : IJob
     public NativeList<int> waterTriangles;
     public NativeList<Vector2> uvs;
 
-    const byte Air = 0;
-    const byte Grass = 1;
-    const byte Dirt = 2;
-    const byte Stone = 3;
-    const byte Water = 4;
-
     const float WaterSurfaceHeight = 0.9f;
 
     public void Execute()
@@ -33,7 +27,7 @@ public struct ChunkMeshJob : IJob
                 for (var z = 0; z < Size; z++)
                 {
                     var block = GetBlock(x, y, z);
-                    if (block == Air) continue;
+                    if (block == (byte)BlockType.Air) continue;
 
                     AddVisibleFaces(x, y, z, block);
                 }
@@ -54,12 +48,12 @@ public struct ChunkMeshJob : IJob
     bool ShouldRenderFace(byte block, int x, int y, int z)
     {
         if (!InBounds(x, y, z))
-            return block != Water;
+            return block != (byte)BlockType.Water;
 
         var neighbor = GetBlock(x, y, z);
 
-        if (neighbor == Air) return true;
-        if (block != Water && neighbor == Water) return true;
+        if (neighbor == (byte)BlockType.Air) return true;
+        if (block != (byte)BlockType.Water && neighbor == (byte)BlockType.Water) return true;
 
         return false;
     }
@@ -73,7 +67,7 @@ public struct ChunkMeshJob : IJob
 
         var tile = GetTile(block, direction);
         AddUVs(tile.x, tile.y);
-        AddTriangles(start, block == Water ? waterTriangles : solidTriangles);
+        AddTriangles(start, block == (byte)BlockType.Water ? waterTriangles : solidTriangles);
     }
 
     void AddUVs(int tileX, int tileY)
@@ -105,17 +99,15 @@ public struct ChunkMeshJob : IJob
 
     int2 GetTile(byte block, int direction)
     {
-        if (block == Grass && direction == 0) return new int2(0, 0);
-        if (block == Grass && direction == 1) return new int2(1, 0);
-        if (block == Grass) return new int2(2, 0);
-        if (block == Dirt) return new int2(1, 0);
-        if (block == Stone) return new int2(3, 0);
-        if (block == Water) return new int2(1, 2);
+        if (block == (byte)BlockType.Grass && direction == 0) return new int2(0, 0);
+        if (block == (byte)BlockType.Grass && direction == 1) return new int2(1, 0);
+        if (block == (byte)BlockType.Grass) return new int2(2, 0);
+        if (block == (byte)BlockType.Dirt) return new int2(1, 0);
+        if (block == (byte)BlockType.Stone) return new int2(3, 0);
+        if (block == (byte)BlockType.Water) return new int2(1, 2);
 
         return int2.zero;
     }
-
-    bool IsAir(int x, int y, int z) => !InBounds(x, y, z) || GetBlock(x, y, z) == Air;
 
     byte GetBlock(int x, int y, int z) => blocks[Index(x, y, z)];
 
@@ -127,7 +119,7 @@ public struct ChunkMeshJob : IJob
 
     static float3 GetFaceVertex(int direction, int index, byte block)
     {
-        var top = block == Water ? WaterSurfaceHeight : 1f;
+        var top = block == (byte)BlockType.Water ? WaterSurfaceHeight : 1f;
 
         return direction switch
         {
