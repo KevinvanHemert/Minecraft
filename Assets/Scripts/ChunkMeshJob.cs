@@ -17,6 +17,12 @@ public struct ChunkMeshJob : IJob
     public NativeList<int> triangles;
     public NativeList<Vector2> uvs;
 
+    const byte Air = 0;
+    const byte Grass = 1;
+    const byte Dirt = 2;
+    const byte Stone = 3;
+    const byte Water = 4;
+
     public void Execute()
     {
         for (var x = 0; x < Size; x++)
@@ -24,7 +30,7 @@ public struct ChunkMeshJob : IJob
                 for (var z = 0; z < Size; z++)
                 {
                     var block = GetBlock(x, y, z);
-                    if (block == 0) continue;
+                    if (block == Air) continue;
 
                     AddVisibleFaces(x, y, z, block);
                 }
@@ -79,16 +85,17 @@ public struct ChunkMeshJob : IJob
 
     int2 GetTile(byte block, int direction)
     {
-        if (block == 1 && direction == 0) return new int2(0, 0);
-        if (block == 1 && direction == 1) return new int2(1, 0);
-        if (block == 1) return new int2(2, 0);
-        if (block == 2) return new int2(1, 0);
-        if (block == 3) return new int2(3, 0);
+        if (block == Grass && direction == 0) return new int2(0, 0);
+        if (block == Grass && direction == 1) return new int2(1, 0);
+        if (block == Grass) return new int2(2, 0);
+        if (block == Dirt) return new int2(1, 0);
+        if (block == Stone) return new int2(3, 0);
+        if (block == Water) return new int2(1, 2);
 
         return int2.zero;
     }
 
-    bool IsAir(int x, int y, int z) => !InBounds(x, y, z) || GetBlock(x, y, z) == 0;
+    bool IsAir(int x, int y, int z) => !InBounds(x, y, z) || GetBlock(x, y, z) == Air;
 
     byte GetBlock(int x, int y, int z) => blocks[Index(x, y, z)];
 
