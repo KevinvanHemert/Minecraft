@@ -86,8 +86,13 @@ public class VoxelChunk : MonoBehaviour
 
         if (TryGetComponent(out MeshCollider collider))
         {
+            var colliderMesh = new Mesh();
+
+            colliderMesh.SetVertices(nativeVertices.AsArray());
+            colliderMesh.SetTriangles(nativeSolidTriangles.AsArray().ToArray(), 0);
+
             collider.sharedMesh = null;
-            collider.sharedMesh = mesh;
+            collider.sharedMesh = colliderMesh;
         }
 
         nativeBlocks.Dispose();
@@ -133,6 +138,11 @@ public class VoxelChunk : MonoBehaviour
 
     static int Index(int x, int y, int z) => x + Size * (y + Size * z);
 
-    byte GetBlock(int x, int y, int z) => blocks[Index(x, y, z)];
+    public byte GetBlock(int x, int y, int z)
+    {
+        if (!InBounds(x, y, z)) return 0;
+        return blocks[Index(x, y, z)];
+    }
+
     void SetBlockLocal(int x, int y, int z, byte block) => blocks[Index(x, y, z)] = block;
 }

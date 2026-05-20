@@ -757,6 +757,10 @@ MonoBehaviour:
   mouseSensitivity: 2
   jumpHeight: 1.5
   gravity: -20
+  world: {fileID: 1949387366}
+  swimSpeed: 3
+  waterGravity: -3
+  swimUpSpeed: 3
 --- !u!143 &1584842125
 CharacterController:
   m_ObjectHideFlags: 0

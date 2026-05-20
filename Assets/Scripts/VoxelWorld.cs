@@ -125,8 +125,24 @@ public class VoxelWorld : MonoBehaviour
         foreach (var (coord, chunk) in loadedChunks) if (chunk.IsDirty) ChunkStorage.Save(coord, chunk.CopyBlocks());
     }
 
+    public byte GetBlockWorld(Vector3Int worldPos)
+    {
+        var chunkCoord = GetChunkCoord(worldPos);
+
+        if (!loadedChunks.TryGetValue(chunkCoord, out var chunk))
+            return 0;
+
+        return chunk.GetBlock(
+            Mod(worldPos.x),
+            worldPos.y,
+            Mod(worldPos.z)
+        );
+    }
+
     static int Mod(int value) => ((value % VoxelChunk.Size) + VoxelChunk.Size) % VoxelChunk.Size;
 
     static Vector2Int GetChunkCoord(Vector3 position) => new(Mathf.FloorToInt(position.x / VoxelChunk.Size), Mathf.FloorToInt(position.z / VoxelChunk.Size));
     static Vector3 GetChunkPosition(Vector2Int coord) => new(coord.x * VoxelChunk.Size, 0, coord.y * VoxelChunk.Size);
+
+
 }
