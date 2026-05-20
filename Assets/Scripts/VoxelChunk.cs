@@ -4,107 +4,85 @@ using UnityEngine;
 [RequireComponent(typeof(MeshFilter), typeof(MeshRenderer))]
 public class VoxelChunk : MonoBehaviour
 {
-    public int worldSeed = 12345;
-
-
-    public bool IsDirty { get; private set; }
-
     public const int Size = 16;
+
     const int AtlasSize = 4;
+    const float UvPadding = 0.001f;
 
-    private byte[,,] blocks = new byte[Size, Size, Size];
-
-    readonly List<Vector3> vertices = new();
-    readonly List<int> triangles = new();
-    readonly List<Vector2> uvs = new();
-
+    public int worldSeed = 12345;
     public int terrainHeight = 8;
     public float terrainScale = 0.08f;
     public int dirtDepth = 3;
 
     public Vector2Int chunkCoord;
-    public int worldXOffset => chunkCoord.x * Size;
-    public int worldZOffset => chunkCoord.y * Size;
 
+    public bool IsDirty { get; private set; }
 
-    private bool hasExternalBlocks;
+    byte[,,] blocks = new byte[Size, Size, Size];
+
+    readonly List<Vector3> vertices = new();
+    readonly List<int> triangles = new();
+    readonly List<Vector2> uvs = new();
+
+    int WorldX => chunkCoord.x * Size;
+    int WorldZ => chunkCoord.y * Size;
 
     public void Initialize(bool generateTerrain)
     {
-        if (generateTerrain)
-            GenerateBlocks();
+        if (generateTerrain) GenerateBlocks();
+        GenerateMesh();
+    }
+
+    public void SetBlock(int x, int y, int z, byte block)
+    {
+        if (!InBounds(x, y, z) || blocks[x, y, z] == block) return;
+
+        blocks[x, y, z] = block;
+        IsDirty = true;
 
         GenerateMesh();
     }
 
-    void GenerateBlocks()
+    public byte[,,] CopyBlocks() => (byte[,,])blocks.Clone();
+
+    public void SetBlocks(byte[,,] newBlocks)
     {
-        for (int x = 0; x < Size; x++)
-            for (int z = 0; z < Size; z++)
-            {
-                float worldX = worldXOffset + x + worldSeed;
-                float worldZ = worldZOffset + z + worldSeed;
-                float noise = Mathf.PerlinNoise(worldX * terrainScale, worldZ * terrainScale);
-
-                int height = Mathf.FloorToInt(noise * terrainHeight) + 4;
-
-                for (int y = 0; y < Size; y++)
-                {
-                    if (y > height)
-                    {
-                        blocks[x, y, z] = 0; // air
-                    }
-                    else if (y == height)
-                    {
-                        blocks[x, y, z] = 1; // grass
-                    }
-                    else if (y >= height - dirtDepth)
-                    {
-                        blocks[x, y, z] = 2; // dirt
-                    }
-                    else
-                    {
-                        blocks[x, y, z] = 3; // stone
-                    }
-                }
-            }
+        blocks = (byte[,,])newBlocks.Clone();
+        IsDirty = false;
     }
 
     public void GenerateMesh()
     {
-        vertices.Clear();
-        triangles.Clear();
-        uvs.Clear();
+        ClearMeshData();
+        ForEachBlock((x, y, z) => { if (blocks[x, y, z] != 0) AddVisibleFaces(x, y, z); });
+        ApplyMesh();
+    }
 
-        for (int x = 0; x < Size; x++)
-            for (int y = 0; y < Size; y++)
-                for (int z = 0; z < Size; z++)
-                {
-                    if (blocks[x, y, z] == 0)
-                        continue;
+    void GenerateBlocks()
+    {
+        ForEachColumn(GenerateColumn);
+    }
 
-                    AddVisibleFaces(x, y, z);
-                }
+    void GenerateColumn(int x, int z)
+    {
+        var noise = Mathf.PerlinNoise((WorldX + x + worldSeed) * terrainScale, (WorldZ + z + worldSeed) * terrainScale);
+        var height = Mathf.FloorToInt(noise * terrainHeight) + 4;
 
-        Mesh mesh = new Mesh();
-        mesh.vertices = vertices.ToArray();
-        mesh.triangles = triangles.ToArray();
-        mesh.uv = uvs.ToArray();
-        mesh.RecalculateNormals();
+        for (var y = 0; y < Size; y++) blocks[x, y, z] = GetTerrainBlock(y, height);
+    }
 
-        GetComponent<MeshFilter>().sharedMesh = mesh;
-
-        if (TryGetComponent(out MeshCollider collider))
-        {
-            collider.sharedMesh = null;
-            collider.sharedMesh = mesh;
-        }
+    byte GetTerrainBlock(int y, int height)
+    {
+        if (y > height) return 0;
+        if (y == height) return 1;
+        if (y >= height - dirtDepth) return 2;
+        return 3;
     }
 
     void AddVisibleFaces(int x, int y, int z)
     {
-        Vector3 pos = new Vector3(x, y, z);
-        byte block = blocks[x, y, z];
+        var pos = new Vector3(x, y, z);
+        var block = blocks[x, y, z];
 
         if (IsAir(x, y + 1, z)) AddFace(pos, Vector3.up, block);
         if (IsAir(x, y - 1, z)) AddFace(pos, Vector3.down, block);
@@ -114,163 +92,112 @@ public class VoxelChunk : MonoBehaviour
         if (IsAir(x, y, z - 1)) AddFace(pos, Vector3.back, block);
     }
 
-    bool IsAir(int x, int y, int z)
-    {
-        if (x < 0 || y < 0 || z < 0 || x >= Size || y >= Size || z >= Size)
-            return true;
-
-        return blocks[x, y, z] == 0;
-    }
-
     void AddFace(Vector3 pos, Vector3 direction, byte block)
     {
-        int start = vertices.Count;
+        var start = vertices.Count;
+        var face = GetFaceVertices(direction);
 
-        Vector3[] face = GetFaceVertices(direction);
+        for (var i = 0; i < 4; i++) vertices.Add(pos + face[i]);
 
-        for (int i = 0; i < 4; i++)
-            vertices.Add(pos + face[i]);
-
-        Vector2Int tile = GetTile(block, direction);
+        var tile = GetTile(block, direction);
         AddUVs(tile.x, tile.y);
+        AddTriangles(start);
+    }
 
-        triangles.Add(start + 0);
+    void AddTriangles(int start)
+    {
+        triangles.Add(start);
         triangles.Add(start + 2);
         triangles.Add(start + 1);
 
-        triangles.Add(start + 0);
+        triangles.Add(start);
         triangles.Add(start + 3);
         triangles.Add(start + 2);
     }
 
-    Vector3[] GetFaceVertices(Vector3 direction)
+    void AddUVs(int tileX, int tileY)
     {
-        // Vertices are ordered as:
-        // bottom-left, top-left, top-right, bottom-right
-        // as seen from OUTSIDE the block.
+        var tileSize = 1f / AtlasSize;
+        tileY = AtlasSize - 1 - tileY;
 
-        if (direction == Vector3.forward)
-            return new[]
-            {
-            new Vector3(0,0,1),
-            new Vector3(0,1,1),
-            new Vector3(1,1,1),
-            new Vector3(1,0,1)
-        };
+        var xMin = tileX * tileSize + UvPadding;
+        var yMin = tileY * tileSize + UvPadding;
+        var xMax = xMin + tileSize - UvPadding * 2;
+        var yMax = yMin + tileSize - UvPadding * 2;
 
-        if (direction == Vector3.back)
-            return new[]
-            {
-            new Vector3(1,0,0),
-            new Vector3(1,1,0),
-            new Vector3(0,1,0),
-            new Vector3(0,0,0)
-        };
+        uvs.Add(new Vector2(xMin, yMin));
+        uvs.Add(new Vector2(xMin, yMax));
+        uvs.Add(new Vector2(xMax, yMax));
+        uvs.Add(new Vector2(xMax, yMin));
+    }
 
-        if (direction == Vector3.right)
-            return new[]
-            {
-            new Vector3(1,0,1),
-            new Vector3(1,1,1),
-            new Vector3(1,1,0),
-            new Vector3(1,0,0)
-        };
+    void ClearMeshData()
+    {
+        vertices.Clear();
+        triangles.Clear();
+        uvs.Clear();
+    }
 
-        if (direction == Vector3.left)
-            return new[]
-            {
-            new Vector3(0,0,0),
-            new Vector3(0,1,0),
-            new Vector3(0,1,1),
-            new Vector3(0,0,1)
-        };
-
-        if (direction == Vector3.up)
-            return new[]
-            {
-            new Vector3(0,1,1),
-            new Vector3(0,1,0),
-            new Vector3(1,1,0),
-            new Vector3(1,1,1)
-        };
-
-        // down
-        return new[]
+    void ApplyMesh()
+    {
+        var mesh = new Mesh
         {
-        new Vector3(0,0,0),
-        new Vector3(0,0,1),
-        new Vector3(1,0,1),
-        new Vector3(1,0,0)
-    };
+            vertices = vertices.ToArray(),
+            triangles = triangles.ToArray(),
+            uv = uvs.ToArray()
+        };
+        mesh.RecalculateNormals();
+        GetComponent<MeshFilter>().sharedMesh = mesh;
+
+        if (!TryGetComponent(out MeshCollider collider)) return;
+
+        collider.sharedMesh = null;
+        collider.sharedMesh = mesh;
     }
 
     Vector2Int GetTile(byte block, Vector3 direction)
     {
-        // tile positions in the atlas
-        // bottom-left is 0,0
-
-        if (block == 1) // grass
-        {
-            if (direction == Vector3.up)
-                return new Vector2Int(0, 0); // grass top
-
-            if (direction == Vector3.down)
-                return new Vector2Int(1, 0); // dirt
-
-            return new Vector2Int(2, 0); // grass side
-        }
-
-        if (block == 2)
-            return new Vector2Int(1, 0); // dirt
-
-        if (block == 3)
-            return new Vector2Int(3, 0); // stone
-
-        return new Vector2Int(0, 0);
+        if (block == 1 && direction == Vector3.up) return new Vector2Int(0, 0);
+        if (block == 1 && direction == Vector3.down) return new Vector2Int(1, 0);
+        if (block == 1) return new Vector2Int(2, 0);
+        if (block == 2) return new Vector2Int(1, 0);
+        if (block == 3) return new Vector2Int(3, 0);
+        return Vector2Int.zero;
     }
 
-    void AddUVs(int tileX, int tileY)
+    static readonly Vector3[] ForwardFace = { new(0, 0, 1), new(0, 1, 1), new(1, 1, 1), new(1, 0, 1) };
+    static readonly Vector3[] BackFace = { new(1, 0, 0), new(1, 1, 0), new(0, 1, 0), new(0, 0, 0) };
+    static readonly Vector3[] RightFace = { new(1, 0, 1), new(1, 1, 1), new(1, 1, 0), new(1, 0, 0) };
+    static readonly Vector3[] LeftFace = { new(0, 0, 0), new(0, 1, 0), new(0, 1, 1), new(0, 0, 1) };
+    static readonly Vector3[] UpFace = { new(0, 1, 1), new(0, 1, 0), new(1, 1, 0), new(1, 1, 1) };
+    static readonly Vector3[] DownFace = { new(0, 0, 0), new(0, 0, 1), new(1, 0, 1), new(1, 0, 0) };
+
+    static Vector3[] GetFaceVertices(Vector3 direction)
     {
-        float tileSize = 1f / AtlasSize;
-        float padding = 0.001f;
-
-        tileY = AtlasSize - 1 - tileY;
-
-        float xMin = tileX * tileSize + padding;
-        float yMin = tileY * tileSize + padding;
-        float xMax = xMin + tileSize - padding * 2;
-        float yMax = yMin + tileSize - padding * 2;
-
-        uvs.Add(new Vector2(xMin, yMin)); // bottom-left
-        uvs.Add(new Vector2(xMin, yMax)); // top-left
-        uvs.Add(new Vector2(xMax, yMax)); // top-right
-        uvs.Add(new Vector2(xMax, yMin)); // bottom-right
+        if (direction == Vector3.forward) return ForwardFace;
+        if (direction == Vector3.back) return BackFace;
+        if (direction == Vector3.right) return RightFace;
+        if (direction == Vector3.left) return LeftFace;
+        if (direction == Vector3.up) return UpFace;
+        return DownFace;
     }
 
-    public void SetBlock(int x, int y, int z, byte block)
+    void ForEachBlock(System.Action<int, int, int> action)
     {
-        if (x < 0 || y < 0 || z < 0 || x >= Size || y >= Size || z >= Size)
-            return;
-
-        if (blocks[x, y, z] == block)
-            return;
-
-        blocks[x, y, z] = block;
-        IsDirty = true;
-
-        Debug.Log($"Chunk {chunkCoord} changed. Dirty = {IsDirty}");
-
-        GenerateMesh();
+        for (var x = 0; x < Size; x++)
+            for (var y = 0; y < Size; y++)
+                for (var z = 0; z < Size; z++)
+                    action(x, y, z);
     }
 
-    public byte[,,] CopyBlocks()
+    void ForEachColumn(System.Action<int, int> action)
     {
-        return (byte[,,])blocks.Clone();
+        for (var x = 0; x < Size; x++)
+            for (var z = 0; z < Size; z++)
+                action(x, z);
     }
 
-    public void SetBlocks(byte[,,] newBlocks)
-    {
-        blocks = (byte[,,])newBlocks.Clone();
-        IsDirty = false;
-    }
+    bool IsAir(int x, int y, int z) => !InBounds(x, y, z) || blocks[x, y, z] == 0;
+
+    bool InBounds(int x, int y, int z) => x >= 0 && y >= 0 && z >= 0 && x < Size && y < Size && z < Size;
 }

@@ -751,6 +751,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 9b777b25270d14047ad5646e51c78004, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  controller: {fileID: 1584842125}
   playerCamera: {fileID: 330585545}
   moveSpeed: 6
   mouseSensitivity: 2
@@ -810,8 +811,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   playerCamera: {fileID: 330585545}
-  range: 6
   world: {fileID: 1949387366}
+  range: 6
 --- !u!1 &1795187373
 GameObject:
   m_ObjectHideFlags: 0
