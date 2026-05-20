@@ -9,10 +9,10 @@ public class VoxelChunk : MonoBehaviour
     public const int Size = 16;
 
     public int worldSeed = 12345;
-    public int terrainHeight = 8;
-    public float terrainScale = 0.08f;
-    public int dirtDepth = 3;
-    public int waterLevel = 5;
+    public int terrainHeight = 14;
+    public float terrainScale = 0.03f;
+    public int dirtDepth = 4;
+    public int waterLevel = 6;
 
     public Vector2Int chunkCoord;
 
