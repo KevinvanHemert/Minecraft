@@ -14,7 +14,8 @@ public struct ChunkMeshJob : IJob
     [ReadOnly] public NativeArray<byte> blocks;
 
     public NativeList<Vector3> vertices;
-    public NativeList<int> triangles;
+    public NativeList<int> solidTriangles;
+    public NativeList<int> waterTriangles;
     public NativeList<Vector2> uvs;
 
     const byte Air = 0;
@@ -22,6 +23,8 @@ public struct ChunkMeshJob : IJob
     const byte Dirt = 2;
     const byte Stone = 3;
     const byte Water = 4;
+
+    const float WaterSurfaceHeight = 0.9f;
 
     public void Execute()
     {
@@ -40,12 +43,25 @@ public struct ChunkMeshJob : IJob
     {
         var pos = new float3(x, y, z);
 
-        if (IsAir(x, y + 1, z)) AddFace(pos, 0, block);
-        if (IsAir(x, y - 1, z)) AddFace(pos, 1, block);
-        if (IsAir(x + 1, y, z)) AddFace(pos, 2, block);
-        if (IsAir(x - 1, y, z)) AddFace(pos, 3, block);
-        if (IsAir(x, y, z + 1)) AddFace(pos, 4, block);
-        if (IsAir(x, y, z - 1)) AddFace(pos, 5, block);
+        if (ShouldRenderFace(block, x, y + 1, z)) AddFace(pos, 0, block);
+        if (ShouldRenderFace(block, x, y - 1, z)) AddFace(pos, 1, block);
+        if (ShouldRenderFace(block, x + 1, y, z)) AddFace(pos, 2, block);
+        if (ShouldRenderFace(block, x - 1, y, z)) AddFace(pos, 3, block);
+        if (ShouldRenderFace(block, x, y, z + 1)) AddFace(pos, 4, block);
+        if (ShouldRenderFace(block, x, y, z - 1)) AddFace(pos, 5, block);
+    }
+
+    bool ShouldRenderFace(byte block, int x, int y, int z)
+    {
+        if (!InBounds(x, y, z))
+            return block != Water;
+
+        var neighbor = GetBlock(x, y, z);
+
+        if (neighbor == Air) return true;
+        if (block != Water && neighbor == Water) return true;
+
+        return false;
     }
 
     void AddFace(float3 pos, int direction, byte block)
@@ -53,18 +69,11 @@ public struct ChunkMeshJob : IJob
         var start = vertices.Length;
 
         for (var i = 0; i < 4; i++)
-            vertices.Add(pos + GetFaceVertex(direction, i));
+            vertices.Add(pos + GetFaceVertex(direction, i, block));
 
         var tile = GetTile(block, direction);
         AddUVs(tile.x, tile.y);
-
-        triangles.Add(start);
-        triangles.Add(start + 2);
-        triangles.Add(start + 1);
-
-        triangles.Add(start);
-        triangles.Add(start + 3);
-        triangles.Add(start + 2);
+        AddTriangles(start, block == Water ? waterTriangles : solidTriangles);
     }
 
     void AddUVs(int tileX, int tileY)
@@ -81,6 +90,17 @@ public struct ChunkMeshJob : IJob
         uvs.Add(new Vector2(xMin, yMax));
         uvs.Add(new Vector2(xMax, yMax));
         uvs.Add(new Vector2(xMax, yMin));
+    }
+
+    void AddTriangles(int start, NativeList<int> target)
+    {
+        target.Add(start);
+        target.Add(start + 2);
+        target.Add(start + 1);
+
+        target.Add(start);
+        target.Add(start + 3);
+        target.Add(start + 2);
     }
 
     int2 GetTile(byte block, int direction)
@@ -105,16 +125,18 @@ public struct ChunkMeshJob : IJob
 
     static int Index(int x, int y, int z) => x + Size * (y + Size * z);
 
-    static float3 GetFaceVertex(int direction, int index)
+    static float3 GetFaceVertex(int direction, int index, byte block)
     {
+        var top = block == Water ? WaterSurfaceHeight : 1f;
+
         return direction switch
         {
             0 => index switch // up
             {
-                0 => new float3(0, 1, 1),
-                1 => new float3(0, 1, 0),
-                2 => new float3(1, 1, 0),
-                _ => new float3(1, 1, 1)
+                0 => new float3(0, top, 1),
+                1 => new float3(0, top, 0),
+                2 => new float3(1, top, 0),
+                _ => new float3(1, top, 1)
             },
             1 => index switch // down
             {
@@ -126,29 +148,29 @@ public struct ChunkMeshJob : IJob
             2 => index switch // right
             {
                 0 => new float3(1, 0, 1),
-                1 => new float3(1, 1, 1),
-                2 => new float3(1, 1, 0),
+                1 => new float3(1, top, 1),
+                2 => new float3(1, top, 0),
                 _ => new float3(1, 0, 0)
             },
             3 => index switch // left
             {
                 0 => new float3(0, 0, 0),
-                1 => new float3(0, 1, 0),
-                2 => new float3(0, 1, 1),
+                1 => new float3(0, top, 0),
+                2 => new float3(0, top, 1),
                 _ => new float3(0, 0, 1)
             },
             4 => index switch // forward
             {
                 0 => new float3(0, 0, 1),
-                1 => new float3(0, 1, 1),
-                2 => new float3(1, 1, 1),
+                1 => new float3(0, top, 1),
+                2 => new float3(1, top, 1),
                 _ => new float3(1, 0, 1)
             },
             _ => index switch // back
             {
                 0 => new float3(1, 0, 0),
-                1 => new float3(1, 1, 0),
-                2 => new float3(0, 1, 0),
+                1 => new float3(1, top, 0),
+                2 => new float3(0, top, 0),
                 _ => new float3(0, 0, 0)
             }
         };

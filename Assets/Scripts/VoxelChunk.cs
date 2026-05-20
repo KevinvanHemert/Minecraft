@@ -14,6 +14,12 @@ public class VoxelChunk : MonoBehaviour
     public int dirtDepth = 3;
     public int waterLevel = 5;
 
+    const byte Air = 0;
+    const byte Grass = 1;
+    const byte Dirt = 2;
+    const byte Stone = 3;
+    const byte Water = 4;
+
     public Vector2Int chunkCoord;
 
     public bool IsDirty { get; private set; }
@@ -51,14 +57,16 @@ public class VoxelChunk : MonoBehaviour
     {
         var nativeBlocks = new NativeArray<byte>(blocks, Allocator.TempJob);
         var nativeVertices = new NativeList<Vector3>(Allocator.TempJob);
-        var nativeTriangles = new NativeList<int>(Allocator.TempJob);
+        var nativeSolidTriangles = new NativeList<int>(Allocator.TempJob);
+        var nativeWaterTriangles = new NativeList<int>(Allocator.TempJob);
         var nativeUvs = new NativeList<Vector2>(Allocator.TempJob);
 
         var job = new ChunkMeshJob
         {
             blocks = nativeBlocks,
             vertices = nativeVertices,
-            triangles = nativeTriangles,
+            solidTriangles = nativeSolidTriangles,
+            waterTriangles = nativeWaterTriangles,
             uvs = nativeUvs
         };
 
@@ -66,8 +74,12 @@ public class VoxelChunk : MonoBehaviour
 
         var mesh = new Mesh();
         mesh.SetVertices(nativeVertices.AsArray());
-        mesh.SetTriangles(nativeTriangles.AsArray().ToArray(), 0);
         mesh.SetUVs(0, nativeUvs.AsArray());
+
+        mesh.subMeshCount = 2;
+        mesh.SetTriangles(nativeSolidTriangles.AsArray().ToArray(), 0);
+        mesh.SetTriangles(nativeWaterTriangles.AsArray().ToArray(), 1);
+
         mesh.RecalculateNormals();
 
         GetComponent<MeshFilter>().sharedMesh = mesh;
@@ -80,7 +92,8 @@ public class VoxelChunk : MonoBehaviour
 
         nativeBlocks.Dispose();
         nativeVertices.Dispose();
-        nativeTriangles.Dispose();
+        nativeSolidTriangles.Dispose();
+        nativeWaterTriangles.Dispose();
         nativeUvs.Dispose();
     }
 
@@ -99,11 +112,14 @@ public class VoxelChunk : MonoBehaviour
 
     byte GetTerrainBlock(int y, int height)
     {
-        if (y > height && y <= waterLevel) return 4;
-        if (y > height) return 0;
-        if (y == height) return 1;
-        if (y >= height - dirtDepth) return 2;
-        return 3;
+        if (y > height && y <= waterLevel) return Water;
+        if (y > height) return Air;
+
+        if (y == height)
+            return height < waterLevel ? Dirt : Grass;
+
+        if (y >= height - dirtDepth) return Dirt;
+        return Stone;
     }
 
     void ForEachColumn(System.Action<int, int> action)
