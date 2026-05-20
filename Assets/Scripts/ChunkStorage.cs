@@ -34,5 +34,4 @@ public static class ChunkStorage
     }
 
     static string GetPath(Vector2Int coord) => Path.Combine(Folder, $"{coord.x}_{coord.y}.chunk");
-
 }

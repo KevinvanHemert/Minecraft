@@ -810,6 +810,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 564550957ffb56443a63c522867d7b60, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  playerController: {fileID: 1584842125}
   playerCamera: {fileID: 330585545}
   world: {fileID: 1949387366}
   range: 6
