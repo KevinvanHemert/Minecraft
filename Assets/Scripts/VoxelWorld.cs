@@ -5,13 +5,41 @@ public class VoxelWorld : MonoBehaviour
 {
     public VoxelChunk chunkPrefab;
     public Transform player;
-    public int renderDistance = 3;
 
+    public int renderDistance = 3;
+    public int chunksLoadedPerFrame = 1;
+
+    readonly Queue<Vector2Int> chunkQueue = new();
+    readonly HashSet<Vector2Int> queuedChunks = new();
     readonly Dictionary<Vector2Int, VoxelChunk> loadedChunks = new();
 
-    void Update() => UpdateChunks();
     void OnApplicationQuit() => SaveDirtyChunks();
     void OnDisable() => SaveDirtyChunks();
+
+    void Start()
+    {
+        LoadInitialChunks();
+    }
+
+    void Update()
+    {
+        UpdateChunks();
+        ProcessChunkQueue();
+    }
+
+    void LoadInitialChunks()
+    {
+        var playerChunk = GetChunkCoord(player.position);
+
+        for (var x = -renderDistance; x <= renderDistance; x++)
+            for (var z = -renderDistance; z <= renderDistance; z++)
+            {
+                var coord = playerChunk + new Vector2Int(x, z);
+
+                if (!loadedChunks.ContainsKey(coord))
+                    LoadChunk(coord);
+            }
+    }
 
     void UpdateChunks()
     {
@@ -24,13 +52,30 @@ public class VoxelWorld : MonoBehaviour
                 var coord = playerChunk + new Vector2Int(x, z);
                 neededChunks.Add(coord);
 
-                if (!loadedChunks.ContainsKey(coord)) LoadChunk(coord);
+                if (!loadedChunks.ContainsKey(coord) && queuedChunks.Add(coord))
+                    chunkQueue.Enqueue(coord);
             }
 
         var chunksToUnload = new List<Vector2Int>();
 
-        foreach (var coord in loadedChunks.Keys) if (!neededChunks.Contains(coord)) chunksToUnload.Add(coord);
-        foreach (var coord in chunksToUnload) UnloadChunk(coord);
+        foreach (var coord in loadedChunks.Keys)
+            if (!neededChunks.Contains(coord))
+                chunksToUnload.Add(coord);
+
+        foreach (var coord in chunksToUnload)
+            UnloadChunk(coord);
+    }
+
+    void ProcessChunkQueue()
+    {
+        for (var i = 0; i < chunksLoadedPerFrame && chunkQueue.Count > 0; i++)
+        {
+            var coord = chunkQueue.Dequeue();
+            queuedChunks.Remove(coord);
+
+            if (!loadedChunks.ContainsKey(coord))
+                LoadChunk(coord);
+        }
     }
 
     void LoadChunk(Vector2Int coord)

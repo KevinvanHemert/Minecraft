@@ -1,4 +1,6 @@
 using System.Collections.Generic;
+using Unity.Collections;
+using Unity.Jobs;
 using UnityEngine;
 
 [RequireComponent(typeof(MeshFilter), typeof(MeshRenderer))]
@@ -18,7 +20,7 @@ public class VoxelChunk : MonoBehaviour
 
     public bool IsDirty { get; private set; }
 
-    byte[,,] blocks = new byte[Size, Size, Size];
+    byte[] blocks = new byte[Size * Size * Size];
 
     readonly List<Vector3> vertices = new();
     readonly List<int> triangles = new();
@@ -35,27 +37,57 @@ public class VoxelChunk : MonoBehaviour
 
     public void SetBlock(int x, int y, int z, byte block)
     {
-        if (!InBounds(x, y, z) || blocks[x, y, z] == block) return;
+        if (!InBounds(x, y, z) || GetBlock(x, y, z) == block) return;
 
-        blocks[x, y, z] = block;
+        SetBlockLocal(x, y, z, block);
         IsDirty = true;
 
         GenerateMesh();
     }
 
-    public byte[,,] CopyBlocks() => (byte[,,])blocks.Clone();
+    public byte[] CopyBlocks() => (byte[])blocks.Clone();
 
-    public void SetBlocks(byte[,,] newBlocks)
+    public void SetBlocks(byte[] newBlocks)
     {
-        blocks = (byte[,,])newBlocks.Clone();
+        blocks = (byte[])newBlocks.Clone();
         IsDirty = false;
     }
 
     public void GenerateMesh()
     {
-        ClearMeshData();
-        ForEachBlock((x, y, z) => { if (blocks[x, y, z] != 0) AddVisibleFaces(x, y, z); });
-        ApplyMesh();
+        var nativeBlocks = new NativeArray<byte>(blocks, Allocator.TempJob);
+        var nativeVertices = new NativeList<Vector3>(Allocator.TempJob);
+        var nativeTriangles = new NativeList<int>(Allocator.TempJob);
+        var nativeUvs = new NativeList<Vector2>(Allocator.TempJob);
+
+        var job = new ChunkMeshJob
+        {
+            blocks = nativeBlocks,
+            vertices = nativeVertices,
+            triangles = nativeTriangles,
+            uvs = nativeUvs
+        };
+
+        job.Schedule().Complete();
+
+        var mesh = new Mesh();
+        mesh.SetVertices(nativeVertices.AsArray());
+        mesh.SetTriangles(nativeTriangles.AsArray().ToArray(), 0);
+        mesh.SetUVs(0, nativeUvs.AsArray());
+        mesh.RecalculateNormals();
+
+        GetComponent<MeshFilter>().sharedMesh = mesh;
+
+        if (TryGetComponent(out MeshCollider collider))
+        {
+            collider.sharedMesh = null;
+            collider.sharedMesh = mesh;
+        }
+
+        nativeBlocks.Dispose();
+        nativeVertices.Dispose();
+        nativeTriangles.Dispose();
+        nativeUvs.Dispose();
     }
 
     void GenerateBlocks()
@@ -68,7 +100,7 @@ public class VoxelChunk : MonoBehaviour
         var noise = Mathf.PerlinNoise((WorldX + x + worldSeed) * terrainScale, (WorldZ + z + worldSeed) * terrainScale);
         var height = Mathf.FloorToInt(noise * terrainHeight) + 4;
 
-        for (var y = 0; y < Size; y++) blocks[x, y, z] = GetTerrainBlock(y, height);
+        for (var y = 0; y < Size; y++) SetBlockLocal(x, y, z, GetTerrainBlock(y, height));
     }
 
     byte GetTerrainBlock(int y, int height)
@@ -82,7 +114,7 @@ public class VoxelChunk : MonoBehaviour
     void AddVisibleFaces(int x, int y, int z)
     {
         var pos = new Vector3(x, y, z);
-        var block = blocks[x, y, z];
+        var block = GetBlock(x, y, z);
 
         if (IsAir(x, y + 1, z)) AddFace(pos, Vector3.up, block);
         if (IsAir(x, y - 1, z)) AddFace(pos, Vector3.down, block);
@@ -197,7 +229,12 @@ public class VoxelChunk : MonoBehaviour
                 action(x, z);
     }
 
-    bool IsAir(int x, int y, int z) => !InBounds(x, y, z) || blocks[x, y, z] == 0;
+    bool IsAir(int x, int y, int z) => !InBounds(x, y, z) || GetBlock(x, y, z) == 0;
 
     bool InBounds(int x, int y, int z) => x >= 0 && y >= 0 && z >= 0 && x < Size && y < Size && z < Size;
+
+    static int Index(int x, int y, int z) => x + Size * (y + Size * z);
+
+    byte GetBlock(int x, int y, int z) => blocks[Index(x, y, z)];
+    void SetBlockLocal(int x, int y, int z, byte block) => blocks[Index(x, y, z)] = block;
 }

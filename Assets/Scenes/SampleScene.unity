@@ -935,7 +935,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   chunkPrefab: {fileID: 6035556739309114110, guid: 2a84da8ff7296914b9c2cd65a3990127, type: 3}
   player: {fileID: 1584842126}
-  renderDistance: 3
+  renderDistance: 16
+  chunksLoadedPerFrame: 1
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0
